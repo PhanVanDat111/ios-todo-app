@@ -27,15 +27,21 @@ workflows:
     publishing:
       email:
         recipients:
-          - user@example.com
+          - pdat7737@gmail.com
         notify:
           success: true
           failure: true
 
   # ─────────────────────────────────────────────
-  #  iOS Workflow – builds IPA for TestFlight
-  #  Requires Apple certificates & profiles set
-  #  up in Codemagic Team > Code Signing
+  #  iOS Workflow – build IPA & upload TestFlight
+  #
+  #  Trước khi dùng, cần điền vào Codemagic:
+  #  1. Environment Variables:
+  #     - APP_STORE_CONNECT_KEY_IDENTIFIER  (Key ID)
+  #     - APP_STORE_CONNECT_ISSUER_ID       (Issuer ID)
+  #     - APP_STORE_CONNECT_PRIVATE_KEY     (nội dung file .p8)
+  #     - CERTIFICATE_PRIVATE_KEY           (private key RSA)
+  #  Tất cả đánh dấu Secure = ON
   # ─────────────────────────────────────────────
   ios-workflow:
     name: iOS Build & TestFlight
@@ -45,6 +51,12 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      # Codemagic tự động quản lý signing khi dùng app_store_connect
+      app_store_connect:
+        auth: integration
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.example.ios_todo_app
     scripts:
       - name: Get Flutter packages
         script: |
@@ -52,21 +64,31 @@ workflows:
       - name: Install CocoaPods dependencies
         script: |
           cd ios && pod install --repo-update
+      - name: Set build number từ Codemagic
+        script: |
+          BUILD_NUMBER=$PROJECT_BUILD_NUMBER
+          agvtool new-version -all $BUILD_NUMBER
       - name: Flutter analyze
         script: |
           flutter analyze || true
-      - name: Build iOS IPA
+      - name: Build iOS IPA (release)
         script: |
           flutter build ipa --release \
-            --export-options-plist=/Users/builder/export_options.plist || \
-          flutter build ipa --release --no-codesign
+            --build-number=$PROJECT_BUILD_NUMBER
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       email:
         recipients:
-          - user@example.com
+          - pdat7737@gmail.com
         notify:
           success: true
           failure: true
+      app_store_connect:
+        # Upload thẳng lên TestFlight sau khi build xong
+        auth: integration
+        submit_to_testflight: true
+        # Tự động thêm tester (tuỳ chọn)
+        beta_groups:
+          - "Internal Testers"
